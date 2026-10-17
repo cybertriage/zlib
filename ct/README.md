@@ -63,17 +63,17 @@ from that same package: `z_stream` holds an `mbedtls_sha256_context`, so its
 layout comes from those headers. Each release's `SOURCE.txt` names the Mbed
 TLS package it was built against. `zlibstat.lib` contains no Mbed TLS code.
 
-`ct/mbedtls.json` names either a release:
+`ct/mbedtls.json` names an Mbed TLS release, its asset, and the asset's
+SHA-256 from the release's `SHA256SUMS`:
 
 ```json
 {"repo": "cybertriage/mbedtls", "tag": "ct-20261017.1", "asset": "mbedtls-ct-20261017.1-win32.zip", "sha256": "..."}
 ```
 
-or, until Mbed TLS has its first release, the package artifact of a
-`ct_release` run, with `"run_id"` instead of `"tag"`. Workflow artifacts
-expire, so switch to a release as soon as there is one: set `tag`, `asset` and
-`sha256` from the release and its `SHA256SUMS`, drop `run_id`, and release
-zlib again.
+To try an unreleased Mbed TLS build, it can instead name the package artifact
+of a `ct_release` run, with `"run_id"` instead of `"tag"`. Workflow artifacts
+expire, so release only zlib built against an Mbed TLS release. After each new
+Mbed TLS release, update the pin and release zlib again.
 
 ## The build
 

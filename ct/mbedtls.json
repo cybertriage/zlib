@@ -1,6 +1,6 @@
 {
   "repo": "cybertriage/mbedtls",
-  "run_id": 38998027225,
-  "asset": "mbedtls-fd2b2c8c018a-win32.zip",
-  "sha256": "a94a22dcf977b054dbd3ee6e4af6ad8722c92a77150bfdd3e892a19987d96403"
+  "tag": "ct-20261017.1",
+  "asset": "mbedtls-ct-20261017.1-win32.zip",
+  "sha256": "5dd59ce36ee2428c024cbde6aed3940bde9163508494abbcc0619ac6e99e20c6"
 }
