@@ -36,6 +36,8 @@
 #else
 # include "zconf.h"
 #endif
+/* Cyber Triage: for the SHA-256 context in z_stream, see gz_hash_init(). */
+#include "mbedtls/sha256.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -107,6 +109,8 @@ typedef struct z_stream_s {
                            for deflate, or the decoding state for inflate */
     uLong   adler;      /* Adler-32 or CRC-32 value of the uncompressed data */
     uLong   reserved;   /* reserved for future use */
+    mbedtls_sha256_context sha256_context; /* Cyber Triage: see gz_hash_init() */
+    int     sha256_ret; /* Cyber Triage: a Z_SHA256_STATE_* value */
 } z_stream;
 
 typedef z_stream FAR *z_streamp;
@@ -1771,6 +1775,8 @@ ZEXTERN int ZEXPORT gzclose(gzFile file);
 
 ZEXTERN int ZEXPORT gzclose_r(gzFile file);
 ZEXTERN int ZEXPORT gzclose_w(gzFile file);
+ZEXTERN int ZEXPORT gzclose_hash_w(gzFile file, unsigned char hashBuf[32],
+                                   z_off64_t *compressedSize);
 /*
      Same as gzclose(), but gzclose_r() is only for use when reading, and
    gzclose_w() is only for use when writing or appending.  The advantage to
@@ -2060,6 +2066,28 @@ ZEXTERN int            ZEXPORTVA gzvprintf(gzFile file,
                                            va_list va);
 #  endif
 #endif
+
+/* Cyber Triage: SHA-256 of a gzip file as it is written. */
+#define Z_SHA256_STATE_UNINITIALIZED  0  /* not started, finished, or failed to start; nothing to free */
+#define Z_SHA256_STATE_ACTIVE         1  /* hashing what is written */
+#define Z_SHA256_STATE_ERROR          2  /* an update failed, so no hash; still to be freed */
+ZEXTERN void ZEXPORT gz_hash_init(gzFile file);
+ZEXTERN int ZEXPORT gzclose_hash(gzFile file, unsigned char hashBuf[32],
+                                 z_off64_t *compressedSize);
+/*
+     gz_hash_init() starts a SHA-256 hash of the bytes written to file, which
+   was opened for writing, from then on: the compressed gzip stream, or the
+   uncompressed data for a transparent ("T") write. Call it before the first
+   write to hash the whole file.
+
+     gzclose_hash() is gzclose() that also reports what was written. For a
+   file opened for writing, after flushing it and before closing it, it stores
+   the hash in hashBuf, or 32 zero bytes if hashing was never started or
+   failed, and the file offset, which for a new file is its size, in
+   *compressedSize. gzclose_hash_w() is the same for writing only. Either of
+   hashBuf and compressedSize may be NULL. gzclose_w() and gzclose() free an
+   unfinished hash.
+*/
 
 #ifdef __cplusplus
 }

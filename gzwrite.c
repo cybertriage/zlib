@@ -5,6 +5,14 @@
 
 #include "gzguts.h"
 
+/* Cyber Triage: add len bytes just written to the file to the SHA-256 hash, if
+   gz_hash_init() started one. */
+local void gz_hash(z_streamp strm, const unsigned char *buf, unsigned len) {
+    if (strm->sha256_ret == Z_SHA256_STATE_ACTIVE &&
+        mbedtls_sha256_update(&(strm->sha256_context), buf, len) != 0)
+        strm->sha256_ret = Z_SHA256_STATE_ERROR;
+}
+
 /* Initialize state for writing a gzip file.  Mark initialization by setting
    state->size to non-zero.  Return -1 on a memory allocation failure, or 0 on
    success. */
@@ -84,6 +92,7 @@ local int gz_comp(gz_statep state, int flush) {
                 gz_error(state, Z_ERRNO, zstrerror());
                 return -1;
             }
+            gz_hash(strm, strm->next_in, (unsigned)writ);
             strm->avail_in -= (unsigned)writ;
             strm->next_in += writ;
         }
@@ -119,6 +128,7 @@ local int gz_comp(gz_statep state, int flush) {
                     gz_error(state, Z_ERRNO, zstrerror());
                     return -1;
                 }
+                gz_hash(strm, state->x.next, (unsigned)writ);
                 state->x.next += writ;
             }
             if (strm->avail_out == 0) {
@@ -698,8 +708,31 @@ int ZEXPORT gzsetparams(gzFile file, int level, int strategy) {
     return Z_OK;
 }
 
+/* Cyber Triage: finish and free the SHA-256 hash, if gz_hash_init() started
+   one. Store it in hash, unless hash is NULL, or 32 zero bytes if there is no
+   hash. */
+local void gz_hash_finish(gz_statep state, unsigned char *hash) {
+    z_streamp strm = &(state->strm);
+
+    if (hash != NULL)
+        memset(hash, 0, 32);
+    if (strm->sha256_ret == Z_SHA256_STATE_UNINITIALIZED)
+        return;
+    if (strm->sha256_ret == Z_SHA256_STATE_ACTIVE && hash != NULL &&
+        mbedtls_sha256_finish(&(strm->sha256_context), hash) != 0)
+        memset(hash, 0, 32);
+    mbedtls_sha256_free(&(strm->sha256_context));
+    strm->sha256_ret = Z_SHA256_STATE_UNINITIALIZED;
+}
+
 /* -- see zlib.h -- */
 int ZEXPORT gzclose_w(gzFile file) {
+    return gzclose_hash_w(file, NULL, NULL);
+}
+
+/* -- see zlib.h -- */
+int ZEXPORT gzclose_hash_w(gzFile file, unsigned char hashBuf[32],
+                           z_off64_t *compressedSize) {
     int ret = Z_OK;
     gz_statep state;
 
@@ -716,9 +749,16 @@ int ZEXPORT gzclose_w(gzFile file) {
     if (state->skip && gz_zero(state) == -1)
         ret = state->err;
 
-    /* flush, free memory, and close file */
+    /* flush */
     if (gz_comp(state, Z_FINISH) == -1)
         ret = state->err;
+
+    /* everything is written: report the hash and the offset */
+    gz_hash_finish(state, hashBuf);
+    if (compressedSize != NULL)
+        *compressedSize = gzoffset64(file);
+
+    /* free memory, and close file */
     if (state->size) {
         if (!state->direct) {
             (void)deflateEnd(&(state->strm));
