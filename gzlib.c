@@ -104,6 +104,7 @@ local gzFile gz_open(const void *path, int fd, const char *mode) {
     state->want = GZBUFSIZE;    /* requested buffer size */
     state->err = Z_OK;          /* no error yet */
     state->msg = NULL;          /* no error message yet */
+    state->strm.sha256_ret = Z_SHA256_STATE_UNINITIALIZED;  /* no hash yet */
 
     /* interpret mode */
     state->mode = GZ_NONE;
