@@ -97,7 +97,7 @@ TLS package it was built against. `zlibstat.lib` contains no Mbed TLS code.
 SHA-256 from the release's `SHA256SUMS`:
 
 ```json
-{"repo": "cybertriage/mbedtls", "tag": "ct-20261017.1", "asset": "mbedtls-ct-20261017.1-win32.zip", "sha256": "..."}
+{"repo": "cybertriage/mbedtls", "tag": "ct-20261120.1", "asset": "mbedtls-ct-20261120.1-win32.zip", "sha256": "..."}
 ```
 
 To try an unreleased Mbed TLS build, it can instead name the package artifact
