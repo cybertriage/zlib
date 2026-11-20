@@ -7,28 +7,52 @@ file's SHA-256 and size in its manifest, which this fork's patch computes as
 the file is written.
 
 Work happens on `ct-1.4`, which is upstream's
-[v1.4](https://github.com/madler/zlib/releases/tag/v1.4) tag plus the
-commits below. `ct-1.4` drops upstream's own workflows, which run on every
-push and build without Mbed TLS, which the patched `zlib.h` needs. `ct-1.3`
-is the same patch on zlib 1.3.2.
+[v1.4](https://github.com/madler/zlib/releases/tag/v1.4) tag plus the changes
+listed below. `ct-1.3` is the same patch on zlib 1.3.2.
 
-## What differs from upstream
+## Changes to stock zlib
 
-- **SHA-256 of gzip output** (`zlib.h`, `gzclose.c`, `gzlib.c`, `gzwrite.c`).
-  `gz_hash_init()` starts a SHA-256 of every byte written to the file from
-  then on: the gzip stream, header and trailer included, or the raw data for a
-  transparent (`"T"`) write. `gzclose_hash()` closes the file like
-  `gzclose()`, and first stores the hash, or 32 zero bytes if hashing was not
-  started or failed, and the file offset, which for a new file is its size.
-  The collector calls `gzopen_w`, `gz_hash_init`, then `gzwrite` and
-  `gzoffset`, then `gzclose_hash`, so the hash and size are those of the file
-  on disk. The hashing uses Mbed TLS: `zlib.h` includes `mbedtls/sha256.h` and
-  `z_stream` holds an `mbedtls_sha256_context`.
-- **Release build.** `.github/workflows/ct_release.yml` and the files in
-  `ct/` build and check the library.
+`ct-1.4` is upstream's `v1.4` tag plus this branch's own commits, and the
+files below are all they touch. Every other file is upstream's, unchanged. To
+see the whole change: `git diff v1.4 ct-1.4`.
+
+**Changed upstream files.** All four are for the SHA-256 of gzip output,
+described in the next section.
+
+| File | Change |
+|---|---|
+| `zlib.h` | Includes `mbedtls/sha256.h`. Adds `sha256_context` and `sha256_ret` to the end of `z_stream`. Declares `gz_hash_init()`, `gzclose_hash()`, `gzclose_hash_w()` and the `Z_SHA256_STATE_*` values. |
+| `gzclose.c` | Adds `gz_hash_init()` and `gzclose_hash()`. |
+| `gzlib.c` | One line: `gz_open()` marks the hash as not started. |
+| `gzwrite.c` | `gz_comp()` adds what each successful `write()` wrote to the hash. Adds `gzclose_hash_w()`, which finishes the hash and reports it with the file offset before closing the file; `gzclose_w()` calls it with no outputs. |
+
+**Deleted:** upstream's seven workflows in `.github/workflows/` (`c-std`,
+`cmake`, `configure`, `contribs`, `fuzz`, `msys-cygwin` and `others`). They
+build zlib without Mbed TLS, which the patched `zlib.h` includes, so they would
+always fail.
+
+**Added:** `.github/workflows/ct_release.yml` and everything in `ct/`: the
+release build, its checks and this README.
+
+**For code built against this zlib:** compression and decompression are
+upstream's; the patch only reads the bytes written. `z_stream` is larger than
+upstream's and its layout comes from the Mbed TLS headers, so a program must
+compile against this `zlib.h` and link the `mbedTLS.lib` from the Mbed TLS
+package this release names (see Mbed TLS below).
+
+## SHA-256 of gzip output
+
+`gz_hash_init()` starts a SHA-256 of every byte written to the file from then
+on: the gzip stream, header and trailer included, or the raw data for a
+transparent (`"T"`) write. `gzclose_hash()` closes the file like `gzclose()`,
+and first stores the hash, or 32 zero bytes if hashing was not started or
+failed, and the file offset, which for a new file is its size. The collector
+calls `gzopen_w`, `gz_hash_init`, then `gzwrite` and `gzoffset`, then
+`gzclose_hash`, so the hash and size are those of the file on disk.
 
 The patch comes from APriestman/zlib's `addHashing` branch (12fcb17263),
-written for zlib 1.3.1, and was rebased onto 1.3.2 with these changes:
+written for zlib 1.3.1. It was rebased onto 1.3.2 with the changes below, and
+applies to 1.4 unchanged:
 
 - zlib 1.3.2 supports non-blocking files: a `write()` may write part of what
   it was given, or fail with `EAGAIN`, and zlib writes the rest later. The
